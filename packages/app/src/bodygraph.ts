@@ -271,26 +271,35 @@ export function renderBodygraph(container: HTMLElement, appState: AppState): voi
     }
   }
 
-  // Set responsive SVG
+  // Set responsive SVG — it defines the wrapper's intrinsic size
   svg.removeAttribute('width');
   svg.removeAttribute('height');
-  svg.setAttribute('style', 'width:100%;height:auto;max-height:85vh;position:relative;z-index:1');
+  svg.setAttribute('style', 'width:100%;height:auto;max-height:85vh;display:block;position:relative;z-index:1');
 
-  // Build container with BG image behind the chart
+  // Build container: relative wrapper so BG absolute-positions against it
   container.innerHTML = '';
 
   const wrapper = document.createElement('div');
-  wrapper.style.cssText = 'position:relative;display:inline-block;width:100%';
+  wrapper.style.cssText = 'position:relative;overflow:hidden';
 
-  // BG image layer — positioned behind chart, zoomed and offset
+  // BG image: absolute, sized as percentage of wrapper (= chart size),
+  // centered horizontally with left+transform, offset vertically
   const bgImg = document.createElement('img');
   bgImg.src = '/bg-body.png';
   bgImg.alt = '';
   bgImg.draggable = false;
-  const bgW = BG_ZOOM * 100;
-  const bgLeft = (100 - bgW) / 2;
-  const bgTop = BG_OFFSET_Y * 100;
-  bgImg.style.cssText = `position:absolute;width:${bgW}%;left:${bgLeft}%;top:${bgTop}%;z-index:0;pointer-events:none;user-select:none`;
+  const bgWidthPct = BG_ZOOM * 100;
+  const bgOffsetYPct = BG_OFFSET_Y * 100;
+  bgImg.style.cssText = [
+    'position:absolute',
+    `width:${bgWidthPct}%`,
+    'left:50%',
+    `top:${bgOffsetYPct}%`,
+    'transform:translateX(-50%)',
+    'z-index:0',
+    'pointer-events:none',
+    'user-select:none',
+  ].join(';');
 
   wrapper.appendChild(bgImg);
   wrapper.appendChild(document.importNode(svg, true));
