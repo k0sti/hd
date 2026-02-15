@@ -76,7 +76,7 @@ function buildLayout(): string {
 
       <div class="flex flex-1 overflow-hidden">
         <!-- Main Area -->
-        <main class="flex-1 flex items-center justify-center overflow-auto p-4" style="background-color:#C1C0BF">
+        <main class="flex-1 flex items-center justify-center overflow-hidden p-4" style="background-color:#C1C0BF">
           <div id="bodygraph-container" class="w-full max-w-2xl"></div>
         </main>
 

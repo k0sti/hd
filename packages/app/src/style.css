@@ -3,8 +3,9 @@
 @tailwind utilities;
 
 @layer base {
-  body {
+  html, body {
     @apply text-gray-800;
     background-color: #C1C0BF;
+    overflow: hidden;
   }
 }
