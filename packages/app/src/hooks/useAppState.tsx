@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, type ReactNode } from 'react';
 import { calculateChart, calculateTransit, analyze, type Chart, type Activation, type ChartAnalysis } from '../hd';
-import { isLoggedIn, saveChartsToNostr, loadChartsFromNostr } from '../nostr';
+import { isLoggedIn, saveChartsToNostr, loadChartsFromNostr, checkIncomingGiftWraps, saveReceivedBirthData, loadReceivedBirthData, type BirthDataPayload } from '../nostr';
 
 export type ViewMode = 'transit' | 'single' | 'person-transit' | 'person-person';
 
@@ -13,6 +13,7 @@ export interface PersonData {
   hour: number;
   minute: number;
   tzOffset: number;
+  sharedBy?: string; // npub or pubkey of person who shared this data
 }
 
 export interface PersonChart {
@@ -151,6 +152,34 @@ function createInitialState(): AppState {
   };
 }
 
+/** Convert a received BirthDataPayload to PersonData */
+function birthDataToPersonData(payload: BirthDataPayload): PersonData | null {
+  try {
+    const dt = new Date(payload.datetime);
+    if (isNaN(dt.getTime())) return null;
+
+    // Extract timezone offset from ISO string (e.g., "+02:00")
+    const tzMatch = payload.datetime.match(/([+-])(\d{2}):(\d{2})$/);
+    const tzOffset = tzMatch
+      ? (tzMatch[1] === '+' ? 1 : -1) * (parseInt(tzMatch[2]) + parseInt(tzMatch[3]) / 60)
+      : 0;
+
+    return {
+      id: generateId(),
+      name: payload.name,
+      year: dt.getFullYear(),
+      month: dt.getMonth() + 1,
+      day: dt.getDate(),
+      hour: dt.getHours(),
+      minute: dt.getMinutes(),
+      tzOffset,
+      sharedBy: payload.npub || 'unknown',
+    };
+  } catch {
+    return null;
+  }
+}
+
 interface AppContextValue {
   state: AppState;
   setViewMode: (mode: ViewMode) => void;
@@ -161,6 +190,7 @@ interface AppContextValue {
   setTransitDate: (date: Date) => void;
   toggleSidebar: () => void;
   syncFromNostr: () => Promise<void>;
+  syncReceivedGiftWraps: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -232,6 +262,44 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     }
   }, [state.persons, state.personCharts]);
 
+  const syncReceivedGiftWraps = useCallback(async () => {
+    const payloads = await checkIncomingGiftWraps();
+    if (payloads.length === 0) return;
+
+    // Merge with previously received data
+    const existing = loadReceivedBirthData();
+    const existingKeys = new Set(existing.map((p) => `${p.name}-${p.datetime}`));
+    const newPayloads = payloads.filter((p) => !existingKeys.has(`${p.name}-${p.datetime}`));
+    if (newPayloads.length === 0) return;
+
+    const allReceived = [...existing, ...newPayloads];
+    saveReceivedBirthData(allReceived);
+
+    // Convert to PersonData and merge into state
+    const localKeys = new Set(state.persons.map((p) => `${p.name}-${p.year}-${p.month}-${p.day}`));
+    const newPersons = [...state.persons];
+    const newCharts = new Map(state.personCharts);
+    let added = false;
+
+    for (const payload of newPayloads) {
+      const person = birthDataToPersonData(payload);
+      if (!person) continue;
+      const key = `${person.name}-${person.year}-${person.month}-${person.day}`;
+      if (localKeys.has(key)) continue;
+
+      newPersons.push(person);
+      const chart = calculateChart(person.year, person.month, person.day, person.hour, person.minute, person.tzOffset);
+      const analysis = analyze(chart);
+      newCharts.set(person.id, { person, chart, analysis });
+      localKeys.add(key);
+      added = true;
+    }
+
+    if (added) {
+      dispatch({ type: 'SYNC_PERSONS', persons: newPersons, charts: newCharts });
+    }
+  }, [state.persons, state.personCharts]);
+
   const value: AppContextValue = {
     state,
     setViewMode,
@@ -242,6 +310,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setTransitDate,
     toggleSidebar,
     syncFromNostr,
+    syncReceivedGiftWraps,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -7,7 +7,11 @@ export function useNostr() {
 
   useEffect(() => {
     initNostr();
-    setLoggedIn(isLoggedIn());
+    const loggedIn = isLoggedIn();
+    setLoggedIn(loggedIn);
+    if (loggedIn) {
+      fetchProfile().then(setProfile).catch(() => {});
+    }
   }, []);
 
   const loginExtension = useCallback(async () => {

@@ -11,7 +11,7 @@ interface Props {
 
 export function LoginDialog({ open, onOpenChange }: Props) {
   const { loginExtension, loginGuest } = useNostr();
-  const { syncFromNostr } = useAppState();
+  const { syncFromNostr, syncReceivedGiftWraps } = useAppState();
   const [error, setError] = useState<string | null>(null);
 
   const handleExtension = async () => {
@@ -20,6 +20,7 @@ export function LoginDialog({ open, onOpenChange }: Props) {
       onOpenChange(false);
       setError(null);
       syncFromNostr().catch(() => {});
+      syncReceivedGiftWraps().catch(() => {});
     } catch (e: any) {
       setError(e.message || 'Extension not found. Install a NIP-07 extension.');
     }
@@ -29,6 +30,7 @@ export function LoginDialog({ open, onOpenChange }: Props) {
     loginGuest();
     onOpenChange(false);
     syncFromNostr().catch(() => {});
+    syncReceivedGiftWraps().catch(() => {});
   };
 
   return (

@@ -2,8 +2,11 @@
 
 import { AccountManager } from 'applesauce-accounts';
 import { ExtensionAccount, PrivateKeyAccount } from 'applesauce-accounts/accounts';
+import { EventFactory } from 'applesauce-core/event-factory';
 import { SimpleConnectionPool } from 'applesauce-net';
 import { MultiSubscription } from 'applesauce-net';
+import { GiftWrapBlueprint } from 'applesauce-common/blueprints/gift-wrap';
+import { unlockGiftWrap, type Rumor } from 'applesauce-common/helpers/gift-wrap';
 import type { Filter, NostrEvent } from 'nostr-tools';
 import { nip19 } from 'nostr-tools';
 
@@ -81,6 +84,7 @@ export function logout(): void {
   }
   accountManager.clearActive();
   clearProfileCache();
+  clearReceivedBirthData();
 }
 
 export function isLoggedIn(): boolean {
@@ -166,14 +170,21 @@ export async function publishEvent(event: NostrEvent): Promise<void> {
   sub.close();
 }
 
-/** Sign and publish a kind 30078 (NIP-78) addressable event */
+/** Sign and publish a kind 30078 (NIP-78) addressable event with NIP-44 encryption */
 export async function publishAppData(dTag: string, content: string): Promise<void> {
   const signer = accountManager.signer;
-  if (!signer) throw new Error('Not logged in');
+  const pubkey = getPublicKey();
+  if (!signer || !pubkey) throw new Error('Not logged in');
+
+  // NIP-44 self-encryption
+  let encrypted = content;
+  if (signer.nip44) {
+    encrypted = await signer.nip44.encrypt(pubkey, content);
+  }
 
   const template = {
     kind: 30078,
-    content,
+    content: encrypted,
     tags: [['d', dTag]],
     created_at: Math.floor(Date.now() / 1000),
   };
@@ -182,36 +193,179 @@ export async function publishAppData(dTag: string, content: string): Promise<voi
   await publishEvent(signed);
 }
 
-/** Query user's own NIP-78 app data by d-tag prefix */
-export async function queryAppData(dTagPrefix: string): Promise<NostrEvent[]> {
+/** Query user's own NIP-78 app data by d-tag(s) and decrypt */
+export async function queryAppData(dTags: string | string[]): Promise<NostrEvent[]> {
   const pubkey = getPublicKey();
   if (!pubkey) return [];
 
+  const tags = Array.isArray(dTags) ? dTags : [dTags];
   return queryEvents([{
     kinds: [30078],
     authors: [pubkey],
-    '#d': [dTagPrefix],
+    '#d': tags,
   }]);
 }
 
-/** Save all person charts to Nostr as NIP-78 event */
-export async function saveChartsToNostr(persons: any[]): Promise<void> {
-  if (!isLoggedIn()) return;
-  await publishAppData('hd/charts', JSON.stringify(persons));
+/** Decrypt a NIP-78 event's content (NIP-44 self-encrypted) */
+async function decryptAppData(event: NostrEvent): Promise<string> {
+  const signer = accountManager.signer;
+  const pubkey = getPublicKey();
+  if (!signer || !pubkey) return event.content;
+
+  if (signer.nip44) {
+    try {
+      return await signer.nip44.decrypt(pubkey, event.content);
+    } catch {
+      // Fallback: content may be unencrypted (legacy)
+      return event.content;
+    }
+  }
+  return event.content;
 }
 
-/** Load person charts from Nostr */
+/** Create a URL-safe slug from a name */
+function nameSlug(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+/** Save all person charts to Nostr as encrypted NIP-78 events */
+export async function saveChartsToNostr(persons: any[]): Promise<void> {
+  if (!isLoggedIn()) return;
+
+  // Save each person as a separate addressable event
+  const promises = persons.map((p) => {
+    const slug = nameSlug(p.name);
+    const dTag = `hd/natal/${slug}`;
+    return publishAppData(dTag, JSON.stringify(p));
+  });
+  await Promise.all(promises);
+}
+
+/** Load person charts from Nostr (encrypted NIP-78) */
 export async function loadChartsFromNostr(): Promise<any[] | null> {
   if (!isLoggedIn()) return null;
+  const pubkey = getPublicKey();
+  if (!pubkey) return null;
 
-  const events = await queryAppData('hd/charts');
-  if (events.length === 0) return null;
+  // Query all hd/natal/* events — use broad query since relay #d filtering varies
+  const events = await queryEvents([{
+    kinds: [30078],
+    authors: [pubkey],
+  }]);
 
-  // Use most recent event
-  const latest = events.sort((a, b) => b.created_at - a.created_at)[0];
-  try {
-    return JSON.parse(latest.content);
-  } catch {
-    return null;
+  // Filter to hd/natal/* d-tags
+  const natalEvents = events.filter((e) => {
+    const dTag = e.tags.find((t) => t[0] === 'd')?.[1];
+    return dTag && dTag.startsWith('hd/natal/');
+  });
+
+  if (natalEvents.length === 0) return null;
+
+  // Deduplicate by d-tag (keep most recent)
+  const byDTag = new Map<string, NostrEvent>();
+  for (const e of natalEvents) {
+    const dTag = e.tags.find((t) => t[0] === 'd')![1];
+    const existing = byDTag.get(dTag);
+    if (!existing || e.created_at > existing.created_at) {
+      byDTag.set(dTag, e);
+    }
   }
+
+  // Decrypt all events
+  const persons: any[] = [];
+  for (const event of byDTag.values()) {
+    try {
+      const content = await decryptAppData(event);
+      const person = JSON.parse(content);
+      persons.push(person);
+    } catch {
+      // Skip malformed events
+    }
+  }
+
+  return persons.length > 0 ? persons : null;
+}
+
+// ─── NIP-59 Gift Wrap Sharing ───────────────────────────────────────
+
+export interface BirthDataPayload {
+  type: 'hd/birthdata';
+  name: string;
+  datetime: string; // ISO 8601
+  location?: { lat: number; lon: number; name: string };
+  npub?: string;
+}
+
+const RECEIVED_KEY = 'hd-received-birthdata';
+
+/** Send birth data to a recipient via NIP-59 gift wrap */
+export async function sendGiftWrap(recipientPubkey: string, payload: BirthDataPayload): Promise<void> {
+  const signer = accountManager.signer;
+  if (!signer) throw new Error('Not logged in');
+
+  const factory = new EventFactory();
+  factory.setSigner(signer);
+
+  // The inner rumor is a kind 1 event with structured JSON content
+  const rumorTemplate = {
+    kind: 1,
+    content: JSON.stringify(payload),
+    tags: [],
+    created_at: Math.floor(Date.now() / 1000),
+  };
+
+  // GiftWrapBlueprint handles: rumor → seal → gift wrap
+  const wrapped = await factory.create(GiftWrapBlueprint, recipientPubkey, rumorTemplate);
+  await publishEvent(wrapped);
+}
+
+/** Check for incoming gift wraps addressed to the current user */
+export async function checkIncomingGiftWraps(): Promise<BirthDataPayload[]> {
+  const signer = accountManager.signer;
+  const pubkey = getPublicKey();
+  if (!signer || !pubkey) return [];
+
+  const events = await queryEvents([{
+    kinds: [1059],
+    '#p': [pubkey],
+  }]);
+
+  const payloads: BirthDataPayload[] = [];
+  for (const event of events) {
+    try {
+      const rumor: Rumor = await unlockGiftWrap(event, signer);
+      const parsed = JSON.parse(rumor.content);
+      if (parsed.type === 'hd/birthdata') {
+        // Attach sender pubkey if not already present
+        if (!parsed.npub && rumor.pubkey) {
+          parsed.senderPubkey = rumor.pubkey;
+        }
+        payloads.push(parsed as BirthDataPayload);
+      }
+    } catch {
+      // Skip events we can't decrypt or parse
+    }
+  }
+
+  return payloads;
+}
+
+/** Save received birth data to localStorage */
+export function saveReceivedBirthData(data: BirthDataPayload[]): void {
+  localStorage.setItem(RECEIVED_KEY, JSON.stringify(data));
+}
+
+/** Load received birth data from localStorage */
+export function loadReceivedBirthData(): BirthDataPayload[] {
+  try {
+    const raw = localStorage.getItem(RECEIVED_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Clear received birth data (for logout) */
+export function clearReceivedBirthData(): void {
+  localStorage.removeItem(RECEIVED_KEY);
 }
