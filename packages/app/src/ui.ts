@@ -1,6 +1,6 @@
 /** UI components — top bar, sidebar, person management */
 
-import { state, subscribe, setViewMode, addPerson, removePerson, selectPersonA, selectPersonB, setTransitDate, toggleSidebar, type ViewMode } from './state';
+import { state, subscribe, setViewMode, addPerson, removePerson, selectPersonA, selectPersonB, setTransitDate, toggleSidebar, syncFromNostr, type ViewMode } from './state';
 import { renderBodygraph } from './bodygraph';
 import { generateInsightReport, type InsightReport } from './hd';
 import { initNostr, loginWithExtension, loginAsGuest, logout, isLoggedIn, getNpub, accountManager } from './nostr';
@@ -260,6 +260,7 @@ function setupEventHandlers(): void {
       document.getElementById('login-modal')?.classList.add('hidden');
       if (errorEl) errorEl.classList.add('hidden');
       updateProfileButton();
+      syncFromNostr().catch(() => {});
     } catch (e: any) {
       if (errorEl) {
         errorEl.textContent = e.message || 'Extension not found. Install a NIP-07 extension.';
@@ -272,6 +273,7 @@ function setupEventHandlers(): void {
     loginAsGuest();
     document.getElementById('login-modal')?.classList.add('hidden');
     updateProfileButton();
+    syncFromNostr().catch(() => {});
   });
 
   document.getElementById('cancel-login-btn')?.addEventListener('click', () => {

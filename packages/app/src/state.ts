@@ -1,6 +1,7 @@
 /** Application state management */
 
 import { calculateChart, calculateTransit, analyze, type Chart, type Activation, type ChartAnalysis } from './hd';
+import { isLoggedIn, saveChartsToNostr, loadChartsFromNostr } from './nostr';
 
 export type ViewMode = 'transit' | 'single' | 'person-transit' | 'person-person';
 
@@ -48,6 +49,40 @@ function loadPersons(): PersonData[] {
 
 function savePersons(persons: PersonData[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(persons));
+  // Also save to Nostr if logged in (fire and forget)
+  if (isLoggedIn()) {
+    saveChartsToNostr(persons).catch(() => {});
+  }
+}
+
+/** Sync charts from Nostr (merges with local data) */
+export async function syncFromNostr(): Promise<void> {
+  const remote = await loadChartsFromNostr();
+  if (!remote || remote.length === 0) return;
+
+  // Merge: add remote persons that don't exist locally (by matching name+date)
+  const localIds = new Set(state.persons.map((p) => `${p.name}-${p.year}-${p.month}-${p.day}`));
+  let added = false;
+
+  for (const p of remote) {
+    const key = `${p.name}-${p.year}-${p.month}-${p.day}`;
+    if (!localIds.has(key)) {
+      const person: PersonData = { ...p, id: p.id || generateId() };
+      state.persons.push(person);
+      const chart = calculateChart(person.year, person.month, person.day, person.hour, person.minute, person.tzOffset);
+      const analysis = analyze(chart);
+      state.personCharts.set(person.id, { person, chart, analysis });
+      added = true;
+    }
+  }
+
+  if (added) {
+    savePersons(state.persons);
+    if (!state.selectedPersonA && state.persons.length > 0) {
+      state.selectedPersonA = state.persons[0].id;
+    }
+    notify();
+  }
 }
 
 // Global state

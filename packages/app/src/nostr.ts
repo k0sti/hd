@@ -156,3 +156,25 @@ export async function queryAppData(dTagPrefix: string): Promise<NostrEvent[]> {
     '#d': [dTagPrefix],
   }]);
 }
+
+/** Save all person charts to Nostr as NIP-78 event */
+export async function saveChartsToNostr(persons: any[]): Promise<void> {
+  if (!isLoggedIn()) return;
+  await publishAppData('hd/charts', JSON.stringify(persons));
+}
+
+/** Load person charts from Nostr */
+export async function loadChartsFromNostr(): Promise<any[] | null> {
+  if (!isLoggedIn()) return null;
+
+  const events = await queryAppData('hd/charts');
+  if (events.length === 0) return null;
+
+  // Use most recent event
+  const latest = events.sort((a, b) => b.created_at - a.created_at)[0];
+  try {
+    return JSON.parse(latest.content);
+  } catch {
+    return null;
+  }
+}
