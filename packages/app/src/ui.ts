@@ -144,6 +144,36 @@ function setupEventHandlers(): void {
     document.getElementById('add-person-form')?.classList.add('hidden');
   });
 
+  // Insight report
+  document.getElementById('insight-btn')?.addEventListener('click', () => {
+    const personA = state.selectedPersonA ? state.personCharts.get(state.selectedPersonA) : null;
+    if (!personA) return;
+
+    currentReport = generateInsightReport(
+      personA.person.name,
+      personA.chart,
+      personA.analysis,
+      state.transitActivations,
+    );
+
+    const modal = document.getElementById('insight-modal');
+    const content = document.getElementById('insight-report-content');
+    if (modal && content) {
+      content.textContent = currentReport.fullText;
+      modal.classList.remove('hidden');
+    }
+  });
+
+  document.getElementById('close-insight-modal')?.addEventListener('click', () => {
+    document.getElementById('insight-modal')?.classList.add('hidden');
+  });
+
+  document.getElementById('insight-modal')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) {
+      document.getElementById('insight-modal')?.classList.add('hidden');
+    }
+  });
+
   document.getElementById('save-person-btn')?.addEventListener('click', () => {
     const name = (document.getElementById('person-name') as HTMLInputElement).value || 'Unnamed';
     const dateStr = (document.getElementById('person-date') as HTMLInputElement).value;
@@ -190,6 +220,13 @@ function render(): void {
   const container = document.getElementById('bodygraph-container');
   if (container) {
     renderBodygraph(container, state);
+  }
+
+  // Show insight button when person + transit available
+  const insightSection = document.getElementById('insight-section');
+  if (insightSection) {
+    const showInsight = state.selectedPersonA && (state.viewMode === 'person-transit' || state.viewMode === 'single');
+    insightSection.classList.toggle('hidden', !showInsight);
   }
 
   // Render chart info in sidebar
