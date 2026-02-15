@@ -89,4 +89,45 @@ test.describe('Human Design Chart App', () => {
     await expect(sidebar).toContainText('Person B');
   });
 
+  test('profile button shows login modal when not logged in', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('#bodygraph-container svg', { timeout: 15000 });
+
+    // Click profile button
+    await page.click('#profile-btn');
+
+    // Login modal should appear
+    const loginModal = page.locator('#login-modal');
+    await expect(loginModal).toBeVisible();
+
+    // Should have extension and guest buttons
+    await expect(page.locator('#login-extension-btn')).toBeVisible();
+    await expect(page.locator('#login-guest-btn')).toBeVisible();
+
+    // Cancel should close
+    await page.click('#cancel-login-btn');
+    await expect(loginModal).toBeHidden();
+  });
+
+  test('insight report button appears for person view', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('#bodygraph-container svg', { timeout: 15000 });
+
+    // Insight button should be hidden initially (transit mode)
+    const insightSection = page.locator('#insight-section');
+    await expect(insightSection).toBeHidden();
+
+    // Add a person
+    await page.click('#add-person-btn');
+    await page.fill('#person-name', 'Test');
+    await page.fill('#person-date', '1990-01-01');
+    await page.fill('#person-time', '12:00');
+    await page.click('#save-person-btn');
+    await page.waitForTimeout(500);
+
+    // Now in single view, insight button should be visible
+    await expect(insightSection).toBeVisible();
+    await expect(page.locator('#insight-btn')).toBeVisible();
+  });
+
 });
