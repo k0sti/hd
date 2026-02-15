@@ -1,0 +1,10 @@
+[package]
+name = "hd"
+version = "0.1.0"
+edition = "2021"
+description = "Human Design chart calculator"
+
+[dependencies]
+chrono = "0.4"
+clap = { version = "4", features = ["derive"] }
+colored = "3"
