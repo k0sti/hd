@@ -1,1 +1,8 @@
-/target
+target/
+node_modules/
+dist/
+.env
+*.wasm
+.vite/
+playwright-report/
+test-results/
