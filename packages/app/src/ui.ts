@@ -4,6 +4,7 @@ import { state, subscribe, setViewMode, addPerson, removePerson, selectPersonA, 
 import { renderBodygraph } from './bodygraph';
 import { generateInsightReport, type InsightReport } from './hd';
 import { initNostr, loginWithExtension, loginAsGuest, logout, isLoggedIn, getNpub, accountManager } from './nostr';
+import { createReportQuote, waitForPayment, getReportPrice, type PaymentQuote } from './payment';
 
 let currentReport: InsightReport | null = null;
 
@@ -164,6 +165,29 @@ function buildLayout(): string {
       </div>
     </div>
 
+    <!-- Payment Modal -->
+    <div id="payment-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+      <div class="bg-white rounded-xl shadow-xl w-96">
+        <div class="p-6 text-center">
+          <h2 class="text-lg font-semibold mb-2">Pay for Insight Report</h2>
+          <p class="text-sm text-gray-500 mb-4">${getReportPrice()} sats</p>
+          <div id="payment-invoice-section" class="mb-4">
+            <p class="text-xs text-gray-500 mb-2">Pay this Lightning invoice:</p>
+            <div id="payment-invoice" class="bg-gray-50 rounded-lg p-3 text-xs font-mono break-all cursor-pointer hover:bg-gray-100 transition-colors" title="Click to copy"></div>
+            <p id="payment-copied" class="text-xs text-green-500 mt-1 hidden">Copied!</p>
+          </div>
+          <div id="payment-status" class="text-sm text-gray-600 mb-4">
+            <span id="payment-waiting" class="hidden">Waiting for payment...</span>
+            <span id="payment-success" class="hidden text-green-600 font-medium">Payment received!</span>
+            <span id="payment-timeout" class="hidden text-red-500">Payment timed out</span>
+          </div>
+          <button id="cancel-payment-btn" class="w-full py-2 px-4 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors text-sm">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Insight Report Modal -->
     <div id="insight-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
       <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
@@ -211,23 +235,58 @@ function setupEventHandlers(): void {
     document.getElementById('add-person-form')?.classList.add('hidden');
   });
 
-  // Insight report
-  document.getElementById('insight-btn')?.addEventListener('click', () => {
+  // Insight report — show payment modal first
+  document.getElementById('insight-btn')?.addEventListener('click', async () => {
     const personA = state.selectedPersonA ? state.personCharts.get(state.selectedPersonA) : null;
     if (!personA) return;
 
-    currentReport = generateInsightReport(
-      personA.person.name,
-      personA.chart,
-      personA.analysis,
-      state.transitActivations,
-    );
+    // Show payment modal
+    const paymentModal = document.getElementById('payment-modal');
+    const invoiceEl = document.getElementById('payment-invoice');
+    const waitingEl = document.getElementById('payment-waiting');
+    const successEl = document.getElementById('payment-success');
+    const timeoutEl = document.getElementById('payment-timeout');
+    if (!paymentModal || !invoiceEl || !waitingEl || !successEl || !timeoutEl) return;
 
-    const modal = document.getElementById('insight-modal');
-    const content = document.getElementById('insight-report-content');
-    if (modal && content) {
-      content.textContent = currentReport.fullText;
-      modal.classList.remove('hidden');
+    // Reset payment state
+    waitingEl.classList.add('hidden');
+    successEl.classList.add('hidden');
+    timeoutEl.classList.add('hidden');
+    invoiceEl.textContent = 'Loading...';
+    paymentModal.classList.remove('hidden');
+
+    try {
+      const quote = await createReportQuote();
+      invoiceEl.textContent = quote.request;
+      waitingEl.classList.remove('hidden');
+
+      // Copy on click
+      invoiceEl.onclick = () => {
+        navigator.clipboard.writeText(quote.request).then(() => {
+          const copiedEl = document.getElementById('payment-copied');
+          if (copiedEl) {
+            copiedEl.classList.remove('hidden');
+            setTimeout(() => copiedEl.classList.add('hidden'), 2000);
+          }
+        });
+      };
+
+      // Wait for payment
+      const paid = await waitForPayment(quote.quoteId);
+      waitingEl.classList.add('hidden');
+
+      if (paid) {
+        successEl.classList.remove('hidden');
+        // Generate and show report
+        setTimeout(() => {
+          paymentModal.classList.add('hidden');
+          showInsightReport(personA);
+        }, 1000);
+      } else {
+        timeoutEl.classList.remove('hidden');
+      }
+    } catch (e: any) {
+      invoiceEl.textContent = 'Error: ' + (e.message || 'Could not create invoice');
     }
   });
 
@@ -238,6 +297,16 @@ function setupEventHandlers(): void {
   document.getElementById('insight-modal')?.addEventListener('click', (e) => {
     if (e.target === e.currentTarget) {
       document.getElementById('insight-modal')?.classList.add('hidden');
+    }
+  });
+
+  document.getElementById('cancel-payment-btn')?.addEventListener('click', () => {
+    document.getElementById('payment-modal')?.classList.add('hidden');
+  });
+
+  document.getElementById('payment-modal')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) {
+      (e.currentTarget as HTMLElement).classList.add('hidden');
     }
   });
 
@@ -525,6 +594,22 @@ function renderChannelsInfo(): void {
       `).join('')}
     </div>
   `;
+}
+
+function showInsightReport(personChart: { person: { name: string }; chart: any; analysis: any }): void {
+  currentReport = generateInsightReport(
+    personChart.person.name,
+    personChart.chart,
+    personChart.analysis,
+    state.transitActivations,
+  );
+
+  const modal = document.getElementById('insight-modal');
+  const content = document.getElementById('insight-report-content');
+  if (modal && content) {
+    content.textContent = currentReport.fullText;
+    modal.classList.remove('hidden');
+  }
 }
 
 function toLocalDatetimeString(d: Date): string {

@@ -11,6 +11,7 @@
     "test:unit": "vitest run"
   },
   "dependencies": {
+    "@cashu/cashu-ts": "^3.4.1",
     "applesauce-accounts": "^5.1.0",
     "applesauce-content": "^5.0.0",
     "applesauce-core": "^5.1.0",
