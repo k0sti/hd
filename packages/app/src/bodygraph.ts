@@ -3,6 +3,10 @@
 import { ALL_CHANNELS, type Center } from './hd';
 import type { AppState, PersonChart } from './state';
 
+// Background body image config — tune these to align throat/root with chart centers
+const BG_ZOOM = 1.3;       // scale of BG relative to chart width (1.0 = same width, >1 = zoomed in)
+const BG_OFFSET_Y = -0.15; // vertical offset as fraction of chart height (negative = shift up)
+
 // Colors
 const COLOR_INACTIVE = '#e0ddd8';
 const COLOR_PERSONALITY = '#333333';
@@ -38,17 +42,12 @@ const CENTER_SVG_ID: Record<Center, string> = {
 };
 
 let svgTemplate = '';
-let bodySilhouette = '';
 let gradientCounter = 0;
 
 export async function loadSvgTemplate(): Promise<string> {
   if (svgTemplate) return svgTemplate;
-  const [svgResp, bodyResp] = await Promise.all([
-    fetch('/bodygraph-blank.svg'),
-    fetch('/body-silhouette.svg'),
-  ]);
-  svgTemplate = await svgResp.text();
-  bodySilhouette = await bodyResp.text();
+  const resp = await fetch('/bodygraph-blank.svg');
+  svgTemplate = await resp.text();
   return svgTemplate;
 }
 
@@ -210,17 +209,6 @@ export function renderBodygraph(container: HTMLElement, appState: AppState): voi
   const doc = parser.parseFromString(svgTemplate, 'image/svg+xml');
   const svg = doc.documentElement;
 
-  // Insert body silhouette as first child (behind everything)
-  if (bodySilhouette) {
-    const bodyDoc = parser.parseFromString(bodySilhouette, 'image/svg+xml');
-    const bodyG = doc.createElementNS('http://www.w3.org/2000/svg', 'g');
-    bodyG.setAttribute('id', 'BodySilhouette');
-    for (const child of Array.from(bodyDoc.documentElement.children)) {
-      bodyG.appendChild(doc.importNode(child, true));
-    }
-    svg.insertBefore(bodyG, svg.firstChild);
-  }
-
   // Add gradients to defs
   let defs = svg.querySelector('defs');
   if (!defs) {
@@ -283,12 +271,30 @@ export function renderBodygraph(container: HTMLElement, appState: AppState): voi
     }
   }
 
-  // Set container with responsive SVG
-  svg.setAttribute('class', 'w-full h-auto max-h-[85vh]');
+  // Set responsive SVG
   svg.removeAttribute('width');
   svg.removeAttribute('height');
+  svg.setAttribute('style', 'width:100%;height:auto;max-height:85vh;position:relative;z-index:1');
+
+  // Build container with BG image behind the chart
   container.innerHTML = '';
-  container.appendChild(doc.importNode(svg, true));
+
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = 'position:relative;display:inline-block;width:100%';
+
+  // BG image layer — positioned behind chart, zoomed and offset
+  const bgImg = document.createElement('img');
+  bgImg.src = '/bg-body.png';
+  bgImg.alt = '';
+  bgImg.draggable = false;
+  const bgW = BG_ZOOM * 100;
+  const bgLeft = (100 - bgW) / 2;
+  const bgTop = BG_OFFSET_Y * 100;
+  bgImg.style.cssText = `position:absolute;width:${bgW}%;left:${bgLeft}%;top:${bgTop}%;z-index:0;pointer-events:none;user-select:none`;
+
+  wrapper.appendChild(bgImg);
+  wrapper.appendChild(document.importNode(svg, true));
+  container.appendChild(wrapper);
 }
 
 /** Color gates for a single person */
