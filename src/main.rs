@@ -1,6 +1,7 @@
 mod chart;
 mod display;
 mod gates;
+mod svg;
 mod transit;
 mod types;
 
@@ -29,6 +30,10 @@ struct Args {
     /// Include current transit overlay
     #[arg(long)]
     transit: bool,
+
+    /// Output SVG bodygraph to file
+    #[arg(long)]
+    svg: Option<String>,
 }
 
 fn main() {
@@ -62,6 +67,7 @@ fn main() {
     display::print_centers(&analysis);
 
     // Transit overlay
+    let mut transit_gate_set: Option<HashSet<u8>> = None;
     if args.transit {
         let transit_positions = chart::calculate_transit();
 
@@ -70,6 +76,9 @@ fn main() {
             .chain(hd_chart.design.iter())
             .map(|a| a.gate)
             .collect();
+
+        let t_gates: HashSet<u8> = transit_positions.iter().map(|a| a.gate).collect();
+        transit_gate_set = Some(t_gates);
 
         let completed = transit::overlay_transits(
             &natal_gates,
@@ -83,5 +92,16 @@ fn main() {
         };
 
         display::print_transits(&overlay);
+    }
+
+    // SVG output
+    if let Some(path) = &args.svg {
+        let svg_content = svg::generate_svg(
+            &hd_chart,
+            &analysis,
+            transit_gate_set.as_ref(),
+        );
+        std::fs::write(path, &svg_content).expect("Failed to write SVG file");
+        eprintln!("SVG bodygraph written to: {}", path);
     }
 }
