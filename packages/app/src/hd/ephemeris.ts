@@ -32,10 +32,10 @@ let swe: any = null;
 
 export async function initEphemeris(): Promise<void> {
   if (swe) return;
-  // Dynamically import from public dir — Vite serves these as-is,
-  // preserving relative paths for WASM/data file resolution
-  // @ts-ignore dynamic import from public
-  const mod = await import(/* @vite-ignore */ '/swisseph-wrapper.js');
+  // Load from public dir via dynamic import that bypasses Vite's import analysis.
+  // Using Function constructor to completely avoid static analysis.
+  const dynamicImport = new Function('url', 'return import(url)');
+  const mod = await dynamicImport('/swisseph-wrapper.js');
   const SwissEph = mod.default;
   swe = new SwissEph();
   await swe.initSwissEph();

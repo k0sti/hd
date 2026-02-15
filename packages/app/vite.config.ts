@@ -21,5 +21,15 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: ['swisseph-wasm'],
+    include: [
+      'applesauce-accounts',
+      'applesauce-accounts > applesauce-core',
+      'applesauce-accounts > applesauce-signers',
+      'applesauce-net',
+      'applesauce-net > applesauce-core',
+      'applesauce-core',
+      'nostr-tools',
+      '@cashu/cashu-ts',
+    ],
   },
 });
