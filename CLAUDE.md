@@ -1,5 +1,12 @@
 # CLAUDE.md — Human Design Chart App
 
+## Shared Instructions
+Read `seed/obsidian/` for general project conventions:
+- `seed/obsidian/Project Instructions.md` — project structure, component guidelines
+- `seed/obsidian/Hierarchical Workflow.md` — agent team task breakdown
+- `seed/obsidian/Testing.md` — testing strategy
+- `seed/obsidian/Nostr.md` — Nostr integration spec
+
 ## Environment Setup
 ```bash
 # Rust (for CLI crate)
