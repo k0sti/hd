@@ -8,3 +8,4 @@ description = "Human Design chart calculator"
 chrono = "0.4"
 clap = { version = "4", features = ["derive"] }
 colored = "3"
+swiss-eph = "0.2.1"
