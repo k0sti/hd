@@ -109,6 +109,48 @@ test.describe('Human Design Chart App', () => {
     await expect(loginModal).toBeHidden();
   });
 
+  test('bodygraph SVG renders with path elements and bg-body.png loads', async ({ page }) => {
+    const consoleErrors: string[] = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') consoleErrors.push(msg.text());
+    });
+
+    const failedRequests: string[] = [];
+    page.on('requestfailed', (req) => {
+      failedRequests.push(req.url());
+    });
+
+    await page.goto('/');
+    await page.waitForSelector('#bodygraph-container svg', { timeout: 15000 });
+
+    const svg = page.locator('#bodygraph-container svg');
+    await expect(svg).toBeVisible();
+
+    // SVG should contain actual path elements (gates), not an error/404 page
+    const paths = svg.locator('path');
+    const pathCount = await paths.count();
+    expect(pathCount).toBeGreaterThan(10);
+
+    // Gate elements should have valid path data
+    const gate1 = svg.locator('#Gate1');
+    await expect(gate1).toBeVisible();
+    const d = await gate1.getAttribute('d');
+    expect(d).toBeTruthy();
+    expect(d!.length).toBeGreaterThan(10);
+
+    // bg-body.png should load without 404
+    const bgImg = page.locator('#bodygraph-container img[src*="bg-body"]');
+    await expect(bgImg).toBeVisible();
+    const naturalWidth = await bgImg.evaluate((el: HTMLImageElement) => el.naturalWidth);
+    expect(naturalWidth).toBeGreaterThan(0);
+
+    // No failed requests for our assets
+    const assetFailures = failedRequests.filter(
+      (url) => url.includes('bodygraph-blank.svg') || url.includes('bg-body.png')
+    );
+    expect(assetFailures).toHaveLength(0);
+  });
+
   test('insight report button appears for person view', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('#bodygraph-container svg', { timeout: 15000 });

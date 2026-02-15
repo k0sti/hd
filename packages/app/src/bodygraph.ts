@@ -47,7 +47,7 @@ let gradientCounter = 0;
 
 export async function loadSvgTemplate(): Promise<string> {
   if (svgTemplate) return svgTemplate;
-  const resp = await fetch('/bodygraph-blank.svg');
+  const resp = await fetch(`${import.meta.env.BASE_URL}bodygraph-blank.svg`);
   svgTemplate = await resp.text();
   return svgTemplate;
 }
@@ -321,7 +321,7 @@ export function renderBodygraph(container: HTMLElement, appState: AppState): voi
   // BG image: absolute, sized as percentage of wrapper (= chart size),
   // centered horizontally with left+transform, offset vertically
   const bgImg = document.createElement('img');
-  bgImg.src = '/bg-body.png';
+  bgImg.src = `${import.meta.env.BASE_URL}bg-body.png`;
   bgImg.alt = '';
   bgImg.draggable = false;
   const bgOffsetYPct = BG_OFFSET_Y * 100;
