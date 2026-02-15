@@ -152,26 +152,40 @@ function createInitialState(): AppState {
   };
 }
 
-/** Convert a received BirthDataPayload to PersonData */
+/** Convert a received BirthDataPayload to PersonData.
+ *  Parses ISO 8601 string manually to preserve birth-time hour/minute
+ *  regardless of the browser's local timezone. */
 function birthDataToPersonData(payload: BirthDataPayload): PersonData | null {
   try {
-    const dt = new Date(payload.datetime);
-    if (isNaN(dt.getTime())) return null;
+    // Parse ISO 8601: "1976-03-08T00:40:00+02:00"
+    const m = payload.datetime.match(
+      /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?([+-]\d{2}:\d{2})?/
+    );
+    if (!m) return null;
 
-    // Extract timezone offset from ISO string (e.g., "+02:00")
-    const tzMatch = payload.datetime.match(/([+-])(\d{2}):(\d{2})$/);
-    const tzOffset = tzMatch
-      ? (tzMatch[1] === '+' ? 1 : -1) * (parseInt(tzMatch[2]) + parseInt(tzMatch[3]) / 60)
-      : 0;
+    const year = parseInt(m[1]);
+    const month = parseInt(m[2]);
+    const day = parseInt(m[3]);
+    const hour = parseInt(m[4]);
+    const minute = parseInt(m[5]);
+
+    // Extract timezone offset from the ISO string
+    let tzOffset = 0;
+    if (m[7]) {
+      const tzMatch = m[7].match(/([+-])(\d{2}):(\d{2})/);
+      if (tzMatch) {
+        tzOffset = (tzMatch[1] === '+' ? 1 : -1) * (parseInt(tzMatch[2]) + parseInt(tzMatch[3]) / 60);
+      }
+    }
 
     return {
       id: generateId(),
       name: payload.name,
-      year: dt.getFullYear(),
-      month: dt.getMonth() + 1,
-      day: dt.getDate(),
-      hour: dt.getHours(),
-      minute: dt.getMinutes(),
+      year,
+      month,
+      day,
+      hour,
+      minute,
       tzOffset,
       sharedBy: payload.npub || 'unknown',
     };

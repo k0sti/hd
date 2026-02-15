@@ -242,22 +242,38 @@ export async function saveChartsToNostr(persons: any[]): Promise<void> {
 }
 
 /** Load person charts from Nostr (encrypted NIP-78) */
-export async function loadChartsFromNostr(): Promise<any[] | null> {
+export async function loadChartsFromNostr(knownPersonNames?: string[]): Promise<any[] | null> {
   if (!isLoggedIn()) return null;
   const pubkey = getPublicKey();
   if (!pubkey) return null;
 
-  // Query all hd/natal/* events — use broad query since relay #d filtering varies
-  const events = await queryEvents([{
-    kinds: [30078],
-    authors: [pubkey],
-  }]);
+  // Build d-tag list from known person names, plus primary
+  const dTags = ['hd/natal/primary'];
+  if (knownPersonNames) {
+    for (const name of knownPersonNames) {
+      const slug = nameSlug(name);
+      if (slug) dTags.push(`hd/natal/${slug}`);
+    }
+  }
 
-  // Filter to hd/natal/* d-tags
-  const natalEvents = events.filter((e) => {
+  // Query with specific d-tags; also do a broader query to discover unknown charts
+  const [knownEvents, allEvents] = await Promise.all([
+    queryEvents([{ kinds: [30078], authors: [pubkey], '#d': dTags }]),
+    // Broader query to find charts we don't know about yet
+    queryEvents([{ kinds: [30078], authors: [pubkey] }]),
+  ]);
+
+  // Merge and filter to hd/natal/* d-tags
+  const seen = new Set<string>();
+  const natalEvents: NostrEvent[] = [];
+  for (const e of [...knownEvents, ...allEvents]) {
+    if (seen.has(e.id)) continue;
+    seen.add(e.id);
     const dTag = e.tags.find((t) => t[0] === 'd')?.[1];
-    return dTag && dTag.startsWith('hd/natal/');
-  });
+    if (dTag && dTag.startsWith('hd/natal/')) {
+      natalEvents.push(e);
+    }
+  }
 
   if (natalEvents.length === 0) return null;
 
@@ -306,11 +322,11 @@ export async function sendGiftWrap(recipientPubkey: string, payload: BirthDataPa
   const factory = new EventFactory();
   factory.setSigner(signer);
 
-  // The inner rumor is a kind 1 event with structured JSON content
+  // Kind 14 sealed rumor per NIP-59 recommendation
   const rumorTemplate = {
-    kind: 1,
+    kind: 14,
     content: JSON.stringify(payload),
-    tags: [],
+    tags: [['p', recipientPubkey]],
     created_at: Math.floor(Date.now() / 1000),
   };
 
