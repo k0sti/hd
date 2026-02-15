@@ -80,6 +80,7 @@ export function logout(): void {
     accountManager.removeAccount(active);
   }
   accountManager.clearActive();
+  clearProfileCache();
 }
 
 export function isLoggedIn(): boolean {
@@ -93,6 +94,42 @@ export function getPublicKey(): string | null {
 export function getNpub(): string | null {
   const pk = getPublicKey();
   return pk ? nip19.npubEncode(pk) : null;
+}
+
+export function compressNpub(npub: string): string {
+  if (npub.length <= 14) return npub;
+  return `${npub.slice(0, 10)}...${npub.slice(-4)}`;
+}
+
+export interface NostrProfile {
+  name?: string;
+  display_name?: string;
+  picture?: string;
+  about?: string;
+}
+
+let cachedProfile: NostrProfile | null = null;
+
+/** Fetch kind 0 profile metadata for the logged-in user */
+export async function fetchProfile(): Promise<NostrProfile | null> {
+  if (cachedProfile) return cachedProfile;
+  const pubkey = getPublicKey();
+  if (!pubkey) return null;
+
+  const events = await queryEvents([{ kinds: [0], authors: [pubkey], limit: 1 }]);
+  if (events.length === 0) return null;
+
+  try {
+    cachedProfile = JSON.parse(events[0].content) as NostrProfile;
+    return cachedProfile;
+  } catch {
+    return null;
+  }
+}
+
+/** Clear cached profile (call on logout) */
+export function clearProfileCache(): void {
+  cachedProfile = null;
 }
 
 /** Query events from default relays */

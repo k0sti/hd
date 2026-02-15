@@ -1,9 +1,11 @@
 import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 import path from 'path';
 
 export default defineConfig({
   root: '.',
   publicDir: 'public',
+  plugins: [react()],
   server: {
     port: 5174,
   },
@@ -11,6 +13,9 @@ export default defineConfig({
     port: 4174,
   },
   resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
     dedupe: ['nostr-tools', 'applesauce-core'],
   },
   build: {

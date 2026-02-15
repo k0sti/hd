@@ -1,12 +1,12 @@
 /** SVG Bodygraph renderer — colors gates, centers, adds gradients */
 
 import { ALL_CHANNELS, type Center } from './hd';
-import type { AppState, PersonChart } from './state';
+import type { AppState, PersonChart } from './hooks/useAppState';
 
 // Background body image config — tune these to align throat/root with chart centers
-const BG_ZOOM = 2.8;       // scale of BG relative to chart width (1.0 = same width, >1 = zoomed in)
+const BG_ZOOM = 2.75;       // scale of BG relative to chart width (1.0 = same width, >1 = zoomed in)
 const BG_OFFSET_Y = -0.4;  // vertical offset as fraction of chart height (negative = shift up)
-const BG_OFFSET_X = 0.007; // horizontal offset as fraction of container width (positive = right)
+const BG_OFFSET_X = -0.025; // horizontal offset as fraction of container width (positive = right)
 
 // Colors
 const COLOR_INACTIVE = '#e0ddd8';
@@ -52,9 +52,31 @@ export async function loadSvgTemplate(): Promise<string> {
   return svgTemplate;
 }
 
-/** Create an SVG linear gradient definition */
-function makeGradient(id: string, color1: string, color2: string): string {
-  return `<linearGradient id="${id}" x1="0%" y1="0%" x2="100%" y2="0%">
+// Gate gradient directions based on channel path orientation
+interface GradDir { x1: string; y1: string; x2: string; y2: string }
+const DIR_LR: GradDir = { x1: '0%', y1: '0%', x2: '100%', y2: '0%' };     // vertical channels: split left/right
+const DIR_TLBR: GradDir = { x1: '0%', y1: '0%', x2: '100%', y2: '100%' };  // diagonal top-left → bottom-right
+const DIR_TRBL: GradDir = { x1: '100%', y1: '0%', x2: '0%', y2: '100%' };  // diagonal top-right → bottom-left
+
+const GATE_GRADIENT_DIR: Record<number, GradDir> = {};
+
+// Vertical channels (Head↔Ajna, Ajna↔Throat, Throat↔G, G↔Sacral, Sacral↔Root)
+for (const g of [64,61,63,47,24,4,17,43,11,62,23,56,7,1,13,31,8,33,15,2,46,5,14,29,42,3,9,53,60,52]) {
+  GATE_GRADIENT_DIR[g] = DIR_LR;
+}
+// Diagonal top-left to bottom-right (Throat↔SP, SP↔Root right, Ego↔SP, Ego↔Throat, Sacral↔SP)
+for (const g of [35,36,12,22,45,21,37,40,30,41,55,39,49,19,6,59,51,25]) {
+  GATE_GRADIENT_DIR[g] = DIR_TLBR;
+}
+// Diagonal top-right to bottom-left (Throat↔Spleen, Spleen↔Root, Spleen↔Sacral)
+for (const g of [16,48,20,57,34,10,44,26,18,58,28,38,32,54,50,27]) {
+  GATE_GRADIENT_DIR[g] = DIR_TRBL;
+}
+
+/** Create an SVG linear gradient definition with direction based on gate */
+function makeGradient(id: string, color1: string, color2: string, gate?: number): string {
+  const dir = (gate !== undefined && GATE_GRADIENT_DIR[gate]) || DIR_LR;
+  return `<linearGradient id="${id}" x1="${dir.x1}" y1="${dir.y1}" x2="${dir.x2}" y2="${dir.y2}">
     <stop offset="50%" stop-color="${color1}"/>
     <stop offset="50%" stop-color="${color2}"/>
   </linearGradient>`;
@@ -80,7 +102,7 @@ function getGateColor(
     const gradId = `grad-${gate}-${++gradientCounter}`;
     return {
       fill: `url(#${gradId})`,
-      gradient: makeGradient(gradId, pColor, dColor),
+      gradient: makeGradient(gradId, pColor, dColor, gate),
     };
   }
   if (inP) return { fill: pColor };
@@ -172,7 +194,7 @@ export function renderBodygraph(container: HTMLElement, appState: AppState): voi
         const aColor = (inAP && inAD) ? COLOR_PERSONALITY : inAP ? COLOR_PERSONALITY : COLOR_DESIGN;
         const bColor = (inBP && inBD) ? COLOR_B_PERSONALITY : inBP ? COLOR_B_PERSONALITY : COLOR_B_DESIGN;
         const gradId = `grad-${g}-${++gradientCounter}`;
-        gradients.push(makeGradient(gradId, aColor, bColor));
+        gradients.push(makeGradient(gradId, aColor, bColor, g));
         gateColors.set(g, `url(#${gradId})`);
       } else if (inA) {
         const info = getGateColor(g, aGatesP, aGatesD, COLOR_PERSONALITY, COLOR_DESIGN);
@@ -258,6 +280,19 @@ export function renderBodygraph(container: HTMLElement, appState: AppState): voi
   const connect10 = svg.querySelector('#GateConnect10');
   if (connect10) {
     connect10.setAttribute('fill', gateColors.get(10) || COLOR_INACTIVE);
+  }
+
+  // Highlight active gate number text
+  for (const [gate, fill] of gateColors) {
+    const textEl = svg.querySelector(`#GateText${gate}`) as SVGElement | null;
+    if (textEl) {
+      if (fill !== COLOR_INACTIVE) {
+        textEl.setAttribute('fill', '#FFFFFF');
+        textEl.setAttribute('style', 'filter: drop-shadow(1px 1px 1px rgba(0,0,0,0.7))');
+      } else {
+        textEl.setAttribute('fill', '#B2A8A6');
+      }
+    }
   }
 
   // Color centers
