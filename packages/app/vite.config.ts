@@ -4,6 +4,7 @@ import path from 'path';
 
 export default defineConfig({
   root: '.',
+  base: '/hd/',
   publicDir: 'public',
   plugins: [react()],
   server: {
