@@ -11,6 +11,12 @@
     "test:unit": "vitest run"
   },
   "dependencies": {
+    "applesauce-accounts": "^5.1.0",
+    "applesauce-content": "^5.0.0",
+    "applesauce-core": "^5.1.0",
+    "applesauce-net": "^0.10.0",
+    "applesauce-signers": "^5.1.0",
+    "nostr-tools": "^2.23.1",
     "swisseph-wasm": "^0.0.2"
   },
   "devDependencies": {

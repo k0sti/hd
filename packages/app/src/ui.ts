@@ -2,6 +2,9 @@
 
 import { state, subscribe, setViewMode, addPerson, removePerson, selectPersonA, selectPersonB, setTransitDate, toggleSidebar, type ViewMode } from './state';
 import { renderBodygraph } from './bodygraph';
+import { generateInsightReport, type InsightReport } from './hd';
+
+let currentReport: InsightReport | null = null;
 
 // Timezone presets for common locations
 const TZ_PRESETS: Record<string, number> = {
@@ -82,10 +85,28 @@ function buildLayout(): string {
                 </div>
               </div>
             </div>
+            <div id="insight-section" class="mb-6 hidden">
+              <button id="insight-btn" class="w-full py-2 px-3 text-sm bg-indigo-500 text-white hover:bg-indigo-600 rounded-lg transition-colors">
+                Generate Insight Report
+              </button>
+            </div>
             <div id="gates-info" class="mb-6"></div>
             <div id="channels-info"></div>
           </div>
         </aside>
+      </div>
+    </div>
+
+    <!-- Insight Report Modal -->
+    <div id="insight-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+      <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+        <div class="flex items-center justify-between p-4 border-b">
+          <h2 class="text-lg font-semibold">Transit Insight Report</h2>
+          <button id="close-insight-modal" class="p-1 hover:bg-gray-100 rounded">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div id="insight-report-content" class="p-4 overflow-y-auto flex-1 text-sm whitespace-pre-wrap font-mono leading-relaxed"></div>
       </div>
     </div>
   `;
