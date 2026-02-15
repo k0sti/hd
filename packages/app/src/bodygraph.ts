@@ -4,8 +4,8 @@ import { ALL_CHANNELS, type Center } from './hd';
 import type { AppState, PersonChart } from './state';
 
 // Background body image config — tune these to align throat/root with chart centers
-const BG_ZOOM = 0.6;       // scale of BG relative to chart width (1.0 = same width, >1 = zoomed in)
-const BG_OFFSET_Y = -0.05; // vertical offset as fraction of chart height (negative = shift up)
+const BG_ZOOM = 2;       // scale of BG relative to chart width (1.0 = same width, >1 = zoomed in)
+const BG_OFFSET_Y = 0.0; // vertical offset as fraction of chart height (negative = shift up)
 
 // Colors
 const COLOR_INACTIVE = '#e0ddd8';
@@ -280,7 +280,7 @@ export function renderBodygraph(container: HTMLElement, appState: AppState): voi
   container.innerHTML = '';
 
   const wrapper = document.createElement('div');
-  wrapper.style.cssText = 'position:relative;overflow:hidden';
+  wrapper.style.cssText = 'position:relative;overflow:visible';
 
   // BG image: absolute, sized as percentage of wrapper (= chart size),
   // centered horizontally with left+transform, offset vertically
