@@ -22,7 +22,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     rollupOptions: {
-      external: ['/swisseph-wrapper.js'],
+      external: [/swisseph-wrapper\.js/],
     },
   },
   optimizeDeps: {
