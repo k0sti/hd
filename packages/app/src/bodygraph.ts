@@ -4,8 +4,9 @@ import { ALL_CHANNELS, type Center } from './hd';
 import type { AppState, PersonChart } from './state';
 
 // Background body image config — tune these to align throat/root with chart centers
-const BG_ZOOM = 2;       // scale of BG relative to chart width (1.0 = same width, >1 = zoomed in)
-const BG_OFFSET_Y = 0.0; // vertical offset as fraction of chart height (negative = shift up)
+const BG_ZOOM = 2.8;       // scale of BG relative to chart width (1.0 = same width, >1 = zoomed in)
+const BG_OFFSET_Y = -0.4;  // vertical offset as fraction of chart height (negative = shift up)
+const BG_OFFSET_X = 0.007; // horizontal offset as fraction of container width (positive = right)
 
 // Colors
 const COLOR_INACTIVE = '#e0ddd8';
@@ -294,7 +295,7 @@ export function renderBodygraph(container: HTMLElement, appState: AppState): voi
     'width:100%',
     'left:50%',
     `top:${bgOffsetYPct}%`,
-    `transform:translateX(-50%) scale(${BG_ZOOM})`,
+    `transform:translateX(calc(-50% + ${BG_OFFSET_X * 100}%)) scale(${BG_ZOOM})`,
     'transform-origin:top center',
     'z-index:0',
     'pointer-events:none',
