@@ -5,7 +5,7 @@ export default defineConfig({
   timeout: 30000,
   retries: 0,
   use: {
-    baseURL: 'http://localhost:4173',
+    baseURL: 'http://localhost:4174',
     headless: true,
     channel: 'chromium',
     launchOptions: {
@@ -14,7 +14,7 @@ export default defineConfig({
   },
   webServer: {
     command: 'bun run preview',
-    port: 4173,
+    port: 4174,
     reuseExistingServer: !process.env.CI,
     timeout: 10000,
   },
