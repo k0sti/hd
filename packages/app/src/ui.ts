@@ -3,6 +3,7 @@
 import { state, subscribe, setViewMode, addPerson, removePerson, selectPersonA, selectPersonB, setTransitDate, toggleSidebar, type ViewMode } from './state';
 import { renderBodygraph } from './bodygraph';
 import { generateInsightReport, type InsightReport } from './hd';
+import { initNostr, loginWithExtension, loginAsGuest, logout, isLoggedIn, getNpub, accountManager } from './nostr';
 
 let currentReport: InsightReport | null = null;
 
@@ -14,6 +15,8 @@ const TZ_PRESETS: Record<string, number> = {
 };
 
 export function initUI(): void {
+  initNostr();
+
   const app = document.getElementById('app')!;
   app.innerHTML = buildLayout();
 
@@ -25,6 +28,22 @@ export function initUI(): void {
 
   // Initial render
   render();
+  updateProfileButton();
+}
+
+function updateProfileButton(): void {
+  const btn = document.getElementById('profile-btn');
+  if (!btn) return;
+
+  if (isLoggedIn()) {
+    btn.classList.remove('bg-gray-200', 'hover:bg-gray-300');
+    btn.classList.add('bg-purple-200', 'hover:bg-purple-300');
+    btn.innerHTML = `<svg class="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>`;
+  } else {
+    btn.classList.add('bg-gray-200', 'hover:bg-gray-300');
+    btn.classList.remove('bg-purple-200', 'hover:bg-purple-300');
+    btn.innerHTML = `<svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>`;
+  }
 }
 
 function buildLayout(): string {
@@ -46,6 +65,11 @@ function buildLayout(): string {
             <button data-mode="person-person" class="view-btn px-3 py-1 text-sm rounded-md transition-colors">+Person</button>
           </div>
           <input type="datetime-local" id="transit-datetime" class="text-sm border rounded px-2 py-1 hidden sm:block" />
+          <button id="profile-btn" class="ml-2 w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center overflow-hidden transition-colors" title="Login / Profile">
+            <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+            </svg>
+          </button>
         </div>
       </header>
 
@@ -94,6 +118,49 @@ function buildLayout(): string {
             <div id="channels-info"></div>
           </div>
         </aside>
+      </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="login-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+      <div class="bg-white rounded-xl shadow-xl w-80">
+        <div class="p-6 text-center">
+          <h2 class="text-lg font-semibold mb-4">Login to Nostr</h2>
+          <div class="space-y-3">
+            <button id="login-extension-btn" class="w-full py-2 px-4 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm">
+              Login with Extension (NIP-07)
+            </button>
+            <button id="login-guest-btn" class="w-full py-2 px-4 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm">
+              Continue as Guest
+            </button>
+            <button id="cancel-login-btn" class="w-full py-2 px-4 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors text-sm">
+              Cancel
+            </button>
+          </div>
+          <p id="login-error" class="mt-3 text-xs text-red-500 hidden"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Profile Modal -->
+    <div id="profile-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+      <div class="bg-white rounded-xl shadow-xl w-80">
+        <div class="p-6 text-center">
+          <div class="w-16 h-16 rounded-full bg-purple-100 mx-auto mb-3 flex items-center justify-center">
+            <svg class="w-8 h-8 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+            </svg>
+          </div>
+          <p id="profile-npub" class="text-xs font-mono text-gray-500 break-all mb-4"></p>
+          <div class="space-y-2">
+            <button id="logout-btn" class="w-full py-2 px-4 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm">
+              Logout
+            </button>
+            <button id="close-profile-btn" class="w-full py-2 px-4 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors text-sm">
+              Close
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -173,6 +240,62 @@ function setupEventHandlers(): void {
       document.getElementById('insight-modal')?.classList.add('hidden');
     }
   });
+
+  // Profile / Login button
+  document.getElementById('profile-btn')?.addEventListener('click', () => {
+    if (isLoggedIn()) {
+      const npub = getNpub();
+      const npubEl = document.getElementById('profile-npub');
+      if (npubEl && npub) npubEl.textContent = npub;
+      document.getElementById('profile-modal')?.classList.remove('hidden');
+    } else {
+      document.getElementById('login-modal')?.classList.remove('hidden');
+    }
+  });
+
+  document.getElementById('login-extension-btn')?.addEventListener('click', async () => {
+    const errorEl = document.getElementById('login-error');
+    try {
+      await loginWithExtension();
+      document.getElementById('login-modal')?.classList.add('hidden');
+      if (errorEl) errorEl.classList.add('hidden');
+      updateProfileButton();
+    } catch (e: any) {
+      if (errorEl) {
+        errorEl.textContent = e.message || 'Extension not found. Install a NIP-07 extension.';
+        errorEl.classList.remove('hidden');
+      }
+    }
+  });
+
+  document.getElementById('login-guest-btn')?.addEventListener('click', () => {
+    loginAsGuest();
+    document.getElementById('login-modal')?.classList.add('hidden');
+    updateProfileButton();
+  });
+
+  document.getElementById('cancel-login-btn')?.addEventListener('click', () => {
+    document.getElementById('login-modal')?.classList.add('hidden');
+  });
+
+  document.getElementById('logout-btn')?.addEventListener('click', () => {
+    logout();
+    document.getElementById('profile-modal')?.classList.add('hidden');
+    updateProfileButton();
+  });
+
+  document.getElementById('close-profile-btn')?.addEventListener('click', () => {
+    document.getElementById('profile-modal')?.classList.add('hidden');
+  });
+
+  // Close modals on backdrop click
+  for (const id of ['login-modal', 'profile-modal']) {
+    document.getElementById(id)?.addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) {
+        (e.currentTarget as HTMLElement).classList.add('hidden');
+      }
+    });
+  }
 
   document.getElementById('save-person-btn')?.addEventListener('click', () => {
     const name = (document.getElementById('person-name') as HTMLInputElement).value || 'Unnamed';
