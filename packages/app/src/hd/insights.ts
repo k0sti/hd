@@ -182,7 +182,9 @@ function buildReportText(
   const lines: string[] = [];
 
   lines.push(`Transit Insight Report for ${name}`);
-  lines.push(`Generated ${new Date().toLocaleDateString()}`);
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  lines.push(`Generated ${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`);
   lines.push('');
   lines.push(`Type: ${analysis.type} | Strategy: ${strategy}`);
   lines.push(`Authority: ${analysis.authority}`);

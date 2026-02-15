@@ -439,7 +439,7 @@ function renderChartInfo(): void {
   if (state.viewMode === 'transit') {
     el.innerHTML = `
       <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Current Transit</h3>
-      <p class="text-sm text-gray-600">${state.transitDate.toLocaleString()}</p>
+      <p class="text-sm text-gray-600">${formatDateISO(state.transitDate)}</p>
     `;
   } else if (personA) {
     const a = personA.analysis;
@@ -615,4 +615,9 @@ function showInsightReport(personChart: { person: { name: string }; chart: any; 
 function toLocalDatetimeString(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function formatDateISO(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
