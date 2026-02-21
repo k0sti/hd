@@ -3,6 +3,7 @@ node_modules/
 dist/
 .env
 *.wasm
+!packages/app/public/swisseph.wasm
 .vite/
 playwright-report/
 test-results/
